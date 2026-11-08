@@ -2,6 +2,7 @@
 //! and an SSD write-back cache, using kernel passthrough for file I/O when available.
 
 pub mod config;
+pub mod connection;
 pub mod files;
 pub mod flusher;
 pub mod fs;

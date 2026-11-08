@@ -6,7 +6,7 @@ use std::io;
 use std::os::fd::AsRawFd;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use fuser::TimeOrNow;
 
@@ -255,14 +255,29 @@ pub fn block_term_signals() -> io::Result<()> {
     }
 }
 
-/// Wait for SIGINT or SIGTERM (which must be blocked) and return the signal number.
-pub fn wait_term_signal() -> i32 {
+/// Wait for SIGINT or SIGTERM (which must be blocked) and return the signal number, or
+/// `None` once `timeout` (if any) has elapsed.
+pub fn wait_term_signal(timeout: Option<Duration>) -> Option<i32> {
     let set = term_sigset();
-    let mut sig: libc::c_int = 0;
+    let deadline = timeout.map(|t| Instant::now() + t);
     loop {
-        // SAFETY: valid sigset and out-pointer.
-        if unsafe { libc::sigwait(&set, &mut sig) } == 0 {
-            return sig;
+        let ts = deadline.map(|d| {
+            let left = d.saturating_duration_since(Instant::now());
+            libc::timespec {
+                tv_sec: left.as_secs() as libc::time_t,
+                tv_nsec: left.subsec_nanos() as _,
+            }
+        });
+        let ts_ptr = ts
+            .as_ref()
+            .map_or(std::ptr::null(), |t| t as *const libc::timespec);
+        // SAFETY: valid sigset; null siginfo is allowed; timeout is null or points to `ts`.
+        let sig = unsafe { libc::sigtimedwait(&set, std::ptr::null_mut(), ts_ptr) };
+        if sig > 0 {
+            return Some(sig);
+        }
+        if io::Error::last_os_error().raw_os_error() == Some(libc::EAGAIN) {
+            return None;
         }
     }
 }

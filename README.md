@@ -25,6 +25,10 @@ fusecache --backing /mnt/hdd --read-cache /mnt/ssd1/fc --write-cache /mnt/ssd2/f
 Do not modify the backing or cache directories outside the mount while it is mounted.
 
 `fusecache --help` lists every option. Unmount with `fusermount3 -u <mountpoint>` or SIGINT/SIGTERM.
+If the mount is still referenced after a signal-triggered unmount (e.g. a copy in another mount
+namespace, such as a systemd service started after mounting), the FUSE connection is aborted
+5 seconds later, or right away on a second signal. Dirty data stays in the write cache and is
+flushed on the next start.
 
 ## Building
 
