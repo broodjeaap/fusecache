@@ -1,0 +1,40 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      # Integration tests mount via FUSE and skip themselves when /dev/fuse or fusermount3 is unavailable.
+      - name: Test
+        run: cargo test --locked
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Smoke
+        run: target/release/fusecache --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fusecache-x86_64-linux-gnu
+          path: target/release/fusecache
+          if-no-files-found: error
